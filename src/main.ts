@@ -1,5 +1,5 @@
 import { Plugin, Notice, requestUrl, RequestUrlParam, TFile, normalizePath } from 'obsidian';
-import { SynoSyncSettings, DEFAULT_SETTINGS, LocalFileItem } from './types';
+import { SynoSyncSettings, DEFAULT_SETTINGS, LocalFileItem, SyncIndex } from './types';
 import { SynologySyncSettingTab } from './settings/settings-tab';
 import { QuickConnectResolver } from './syno/qc-resolver';
 import { SynologyApiClient, HttpRequester } from './syno/api-client';
@@ -8,9 +8,11 @@ import { SyncManager, VaultAdapter } from './sync/sync-manager';
 
 export default class SynologySyncPlugin extends Plugin {
   settings: SynoSyncSettings = DEFAULT_SETTINGS;
+  syncIndex: SyncIndex = {};
   private statusBarEl!: HTMLElement;
   private isSyncing: boolean = false;
   private syncIntervalId: number | null = null;
+  private activeClient: SynologyApiClient | null = null;
 
   async onload() {
     await this.loadSettings();
@@ -51,12 +53,12 @@ export default class SynologySyncPlugin extends Plugin {
       },
     });
 
-    // 6. Auto sync on startup
-    if (this.settings.autoSyncOnStartup) {
-      setTimeout(() => {
+    // 6. Auto sync on startup using official onLayoutReady hook
+    this.app.workspace.onLayoutReady(() => {
+      if (this.settings.autoSyncOnStartup) {
         this.runSync().catch(console.error);
-      }, 2000);
-    }
+      }
+    });
 
     // 7. Setup periodic interval sync
     this.setupSyncInterval();
@@ -67,15 +69,36 @@ export default class SynologySyncPlugin extends Plugin {
       window.clearInterval(this.syncIntervalId);
       this.syncIntervalId = null;
     }
+    if (this.activeClient) {
+      this.activeClient.logout().catch(console.error);
+      this.activeClient = null;
+    }
     this.setStatusBar('offline');
   }
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const data = await this.loadData();
+    if (data) {
+      this.settings = Object.assign({}, DEFAULT_SETTINGS, data.settings || data);
+      this.syncIndex = data.syncIndex || {};
+    } else {
+      this.settings = Object.assign({}, DEFAULT_SETTINGS);
+      this.syncIndex = {};
+    }
   }
 
   async saveSettings() {
-    await this.saveData(this.settings);
+    await this.saveData({
+      settings: this.settings,
+      syncIndex: this.syncIndex,
+    });
+  }
+
+  resetActiveSession() {
+    if (this.activeClient) {
+      this.activeClient.logout().catch(console.error);
+      this.activeClient = null;
+    }
   }
 
   setupSyncInterval() {
@@ -87,7 +110,6 @@ export default class SynologySyncPlugin extends Plugin {
       this.syncIntervalId = window.setInterval(() => {
         this.runSync().catch(console.error);
       }, this.settings.syncIntervalMinutes * 60 * 1000);
-      this.registerInterval(this.syncIntervalId);
     }
   }
 
@@ -109,46 +131,47 @@ export default class SynologySyncPlugin extends Plugin {
   private parseJsonResponse(res: { text?: string; json?: any }): any {
     if (typeof res.text === 'string' && res.text.trim()) {
       try {
-        return JSON.parse(res.text);
+        return JSON.parse(res.text.trim());
       } catch {
-        // fall through
+        // Fallback to res.json if text parse fails
       }
     }
-    try {
-      return res.json ?? null;
-    } catch {
-      return null;
-    }
+    return res.json;
   }
 
   private createResolver(): QuickConnectResolver {
-    const pingFn = async (url: string, timeoutMs: number) => {
-      const timeoutPromise = new Promise<boolean>((resolve) => setTimeout(() => resolve(false), timeoutMs || 1500));
+    const pingFn = async (url: string) => {
+      let timeoutHandle: any = null;
+      const timeoutPromise = new Promise<boolean>((resolve) => {
+        timeoutHandle = setTimeout(() => resolve(false), 2000);
+      });
+
       const pingPromise = (async () => {
         try {
           const res = await requestUrl({
-            url: `${url}/webman/pingpong.cgi?action=cors&quickconnect=true`,
+            url: `${url}/webapi/entry.cgi?api=SYNO.API.Info&version=1&method=query&query=SYNO.API.Auth`,
             method: 'GET',
             throw: false,
           });
-          if (res.status === 200) {
-            const data = this.parseJsonResponse(res);
-            if (data && (data.success === true || Boolean(data.ezid))) {
-              return true;
-            }
-          }
-          const fallback = await requestUrl({
-            url: `${url}/webapi/query.cgi?api=SYNO.API.Info&version=1&method=query&query=SYNO.API.Auth`,
-            method: 'GET',
-            throw: false,
-          });
-          if (fallback.status === 200) {
+          const data = this.parseJsonResponse(res);
+          if (data && data.success === true) return true;
+
+          if (res.status === 200 || res.status === 404 || res.status === 302) {
+            const fallback = await requestUrl({
+              url: `${url}/webapi/auth.cgi?api=SYNO.API.Auth&version=1&method=query`,
+              method: 'GET',
+              throw: false,
+            });
             const fbData = this.parseJsonResponse(fallback);
             return Boolean(fbData && fbData.success === true);
           }
           return false;
         } catch {
           return false;
+        } finally {
+          if (timeoutHandle !== null) {
+            clearTimeout(timeoutHandle);
+          }
         }
       })();
       return Promise.race([pingPromise, timeoutPromise]);
@@ -229,7 +252,8 @@ export default class SynologySyncPlugin extends Plugin {
       deleteFile: async (path: string) => {
         const file = this.app.vault.getAbstractFileByPath(normalizePath(path));
         if (file instanceof TFile) {
-          await this.app.vault.delete(file);
+          // 移动到系统或 Obsidian 回收站，防止误删
+          await this.app.vault.trash(file, true);
         }
       },
     };
@@ -242,6 +266,22 @@ export default class SynologySyncPlugin extends Plugin {
       mtime: f.stat.mtime,
       size: f.stat.size,
     }));
+  }
+
+  private async getAuthenticatedClient(): Promise<SynologyApiClient> {
+    if (this.activeClient && this.activeClient.getSid()) {
+      return this.activeClient;
+    }
+
+    const http = this.getHttpRequester();
+    const resolver = this.createResolver();
+
+    const baseUrl = await resolver.resolveBaseUrl(this.settings.quickConnectId, this.settings.lanAddress);
+    const client = new SynologyApiClient(baseUrl, http);
+    await client.login(this.settings.account, this.settings.password);
+
+    this.activeClient = client;
+    return client;
   }
 
   async testConnection(): Promise<void> {
@@ -287,44 +327,60 @@ export default class SynologySyncPlugin extends Plugin {
     this.isSyncing = true;
     this.setStatusBar('syncing');
 
-    let client: SynologyApiClient | null = null;
     try {
-      const http = this.getHttpRequester();
-      const resolver = this.createResolver();
+      let client = await this.getAuthenticatedClient();
 
-      const baseUrl = await resolver.resolveBaseUrl(this.settings.quickConnectId, this.settings.lanAddress);
-      client = new SynologyApiClient(baseUrl, http);
-      await client.login(this.settings.account, this.settings.password);
-
+      let remoteFiles;
       try {
-        // 1. Fetch remote files
-        const remoteFiles = await client.listFiles(this.settings.remotePath);
-
-        // 2. Fetch local files
-        const localFiles = await this.getLocalFiles();
-
-        // 3. Compute diff
-        const diff = computeDiff(localFiles, remoteFiles, this.settings.ignorePatterns);
-
-        // 4. Execute sync
-        const manager = new SyncManager(client, this.getVaultAdapter(), this.settings.remotePath);
-        const report = await manager.executeSync(diff);
-
-        if (report.errors.length > 0) {
-          this.setStatusBar('partial-error');
-          new Notice(`Sync finished with errors: ↑${report.uploadedCount} ↓${report.downloadedCount} ⚡${report.conflictCount} ❌${report.errors.length} failed. Check console for details.`);
-          console.warn('[SynologySync] Sync completed with errors:', report.errors);
+        remoteFiles = await client.listFiles(this.settings.remotePath);
+      } catch (err: any) {
+        // 若会话超时失效 (DSM error 105, 106, 107, 119)，清除缓存并重新登录一次
+        const errMsg = String(err?.message || err);
+        const isSessionExpired =
+          errMsg.includes('105') || errMsg.includes('106') || errMsg.includes('107') || errMsg.includes('119');
+        if (isSessionExpired) {
+          this.activeClient = null;
+          client = await this.getAuthenticatedClient();
+          remoteFiles = await client.listFiles(this.settings.remotePath);
         } else {
-          this.setStatusBar('idle', 'Synced');
-          new Notice(`Sync Done: ↑${report.uploadedCount} ↓${report.downloadedCount} ⚡${report.conflictCount}`);
+          throw err;
         }
-      } finally {
-        await client.logout().catch(console.error);
+      }
+
+      // 1. Fetch local files
+      const localFiles = await this.getLocalFiles();
+
+      // 2. Compute 3-way diff
+      const diff = computeDiff(localFiles, remoteFiles, this.settings.ignorePatterns, this.syncIndex);
+
+      // 3. Execute sync
+      const manager = new SyncManager(client, this.getVaultAdapter(), this.settings.remotePath, this.syncIndex);
+      const report = await manager.executeSync(diff);
+
+      // 4. Update and persist syncIndex
+      if (report.updatedIndex) {
+        this.syncIndex = report.updatedIndex;
+        await this.saveSettings();
+      }
+
+      if (report.errors.length > 0) {
+        this.setStatusBar('partial-error');
+        new Notice(
+          `Sync finished with errors: ↑${report.uploadedCount} ↓${report.downloadedCount} ⚡${report.conflictCount} 🗑️${report.deletedRemoteCount + report.deletedLocalCount} ❌${report.errors.length} failed.`
+        );
+        console.warn('[SynologySync] Sync completed with errors:', report.errors);
+      } else {
+        this.setStatusBar('idle', 'Synced');
+        new Notice(
+          `Sync Done: ↑${report.uploadedCount} ↓${report.downloadedCount} ⚡${report.conflictCount} 🗑️${report.deletedRemoteCount + report.deletedLocalCount}`
+        );
       }
     } catch (e: any) {
       this.setStatusBar('error');
       new Notice(`Sync Failed: ${e.message || e}`);
       console.error('[SynologySync]', e);
+      // 若是网络不可达或关键错误，重置缓存以便下次重新探活
+      this.activeClient = null;
     } finally {
       this.isSyncing = false;
     }

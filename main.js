@@ -43,8 +43,8 @@ var DEFAULT_SETTINGS = {
     ".DS_Store",
     "Thumbs.db",
     "desktop.ini",
-    ".obsidian/workspace.json",
-    ".obsidian/cache/**",
+    ".obsidian/**",
+    ".git/**",
     "*.tmp",
     "*.syno_download.tmp"
   ]
@@ -63,25 +63,30 @@ var SynologySyncSettingTab = class extends import_obsidian.PluginSettingTab {
     containerEl.createEl("h2", { text: "Synology Sync Settings" });
     new import_obsidian.Setting(containerEl).setName("QuickConnect ID").setDesc("Your Synology QuickConnect ID (for external/WAN sync).").addText((text) => text.setPlaceholder("e.g. my-nas").setValue(this.plugin.settings.quickConnectId).onChange(async (value) => {
       this.plugin.settings.quickConnectId = value.trim();
+      this.plugin.resetActiveSession();
       await this.plugin.saveSettings();
     }));
     new import_obsidian.Setting(containerEl).setName("LAN Address (Optional / \u5C40\u57DF\u7F51\u5730\u5740)").setDesc("Local network address (e.g. http://192.168.1.100:5000). Highly recommended for fast, direct Gigabit sync.").addText((text) => text.setPlaceholder("http://192.168.1.100:5000").setValue(this.plugin.settings.lanAddress).onChange(async (value) => {
       this.plugin.settings.lanAddress = value.trim();
+      this.plugin.resetActiveSession();
       await this.plugin.saveSettings();
     }));
     new import_obsidian.Setting(containerEl).setName("DSM Account").setDesc("Synology DSM username.").addText((text) => text.setPlaceholder("admin").setValue(this.plugin.settings.account).onChange(async (value) => {
       this.plugin.settings.account = value.trim();
+      this.plugin.resetActiveSession();
       await this.plugin.saveSettings();
     }));
     new import_obsidian.Setting(containerEl).setName("DSM Password").setDesc("Password is stored locally on this device in data.json (plain text). \u5BC6\u7801\u4EC5\u5B58\u50A8\u4E8E\u672C\u8BBE\u5907\u914D\u7F6E\u6587\u4EF6\u4E2D\u3002").addText((text) => {
       text.inputEl.type = "password";
       text.setPlaceholder("\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022").setValue(this.plugin.settings.password).onChange(async (value) => {
         this.plugin.settings.password = value;
+        this.plugin.resetActiveSession();
         await this.plugin.saveSettings();
       });
     });
     new import_obsidian.Setting(containerEl).setName("Remote Vault Path").setDesc("Target directory path on Synology NAS.").addText((text) => text.setPlaceholder("/homes/username/ObsidianVault").setValue(this.plugin.settings.remotePath).onChange(async (value) => {
       this.plugin.settings.remotePath = value.trim();
+      this.plugin.resetActiveSession();
       await this.plugin.saveSettings();
     }));
     new import_obsidian.Setting(containerEl).setName("Test Connection").setDesc("Test network reachability and authentication with your NAS.").addButton((btn) => btn.setButtonText("Test Connection").setCta().onClick(async () => {
@@ -107,6 +112,14 @@ var SynologySyncSettingTab = class extends import_obsidian.PluginSettingTab {
       await this.plugin.saveSettings();
       this.plugin.setupSyncInterval();
     }));
+    new import_obsidian.Setting(containerEl).setName("Ignore Patterns").setDesc("Paths or wildcard patterns to ignore during sync (one pattern per line). Supported: *.tmp, folder/**, ._*").addTextArea((text) => {
+      text.inputEl.rows = 6;
+      text.inputEl.cols = 40;
+      text.setPlaceholder(".obsidian/**\n.git/**\n*.tmp\n.DS_Store").setValue((this.plugin.settings.ignorePatterns || []).join("\n")).onChange(async (value) => {
+        this.plugin.settings.ignorePatterns = value.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
+        await this.plugin.saveSettings();
+      });
+    });
   }
 };
 
@@ -449,17 +462,32 @@ var SynologyApiClient = class {
     return this.sid;
   }
   async login(account, passwd, otpCode) {
-    const buildAuthUrl = (version) => {
-      let u = `${this.baseUrl}/webapi/auth.cgi?api=SYNO.API.Auth&version=${version}&method=login&account=${encodeURIComponent(account)}&passwd=${encodeURIComponent(passwd)}&session=FileStation&format=sid`;
+    const buildAuthBody = (version) => {
+      let params = `api=SYNO.API.Auth&version=${version}&method=login&account=${encodeURIComponent(account)}&passwd=${encodeURIComponent(passwd)}&session=FileStation&format=sid`;
       if (otpCode) {
-        u += `&otp_code=${encodeURIComponent(otpCode)}`;
+        params += `&otp_code=${encodeURIComponent(otpCode)}`;
       }
-      return u;
+      return params;
     };
-    let res = await this.http({ url: buildAuthUrl(6), method: "GET" });
+    const url = `${this.baseUrl}/webapi/auth.cgi`;
+    let res = await this.http({
+      url,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: buildAuthBody(6)
+    });
     let json = res.json;
     if (json && !json.success && json.error?.code === 104) {
-      res = await this.http({ url: buildAuthUrl(3), method: "GET" });
+      res = await this.http({
+        url,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: buildAuthBody(3)
+      });
       json = res.json;
     }
     if (!json) {
@@ -487,7 +515,7 @@ var SynologyApiClient = class {
       this.sid = "";
     }
   }
-  async listFiles(remoteVaultRoot, currentFolder, depth = 0, visitedPaths = /* @__PURE__ */ new Set()) {
+  async listFiles(remoteVaultRoot, currentFolder, depth = 0, visitedPaths = /* @__PURE__ */ new Set(), relativeDir = "") {
     const cleanRoot = remoteVaultRoot.replace(/\/+$/, "");
     const folderToQuery = currentFolder ? currentFolder.replace(/\/+$/, "") : cleanRoot;
     if (depth > 30 || visitedPaths.has(folderToQuery)) {
@@ -523,7 +551,16 @@ var SynologyApiClient = class {
     let results = [];
     for (const f of allRawFiles) {
       const fullPath = f.path;
-      let relPath = fullPath.startsWith(cleanRoot) ? fullPath.slice(cleanRoot.length) : fullPath;
+      let relPath = "";
+      if (f.name) {
+        relPath = relativeDir ? `${relativeDir}/${f.name}` : f.name;
+      } else {
+        if (fullPath.toLowerCase().startsWith(cleanRoot.toLowerCase())) {
+          relPath = fullPath.slice(cleanRoot.length);
+        } else {
+          relPath = fullPath;
+        }
+      }
       relPath = relPath.replace(/^\/+/, "");
       results.push({
         path: relPath,
@@ -534,16 +571,25 @@ var SynologyApiClient = class {
         md5: f.additional?.md5 || void 0
       });
       if (f.isdir) {
-        const subFiles = await this.listFiles(remoteVaultRoot, fullPath, depth + 1, visitedPaths);
+        const subFiles = await this.listFiles(remoteVaultRoot, fullPath, depth + 1, visitedPaths, relPath);
         results = results.concat(subFiles);
       }
     }
     return results;
   }
-  async uploadFile(targetFolder, fileName, content) {
+  async uploadFile(targetFolder, fileName, content, mtimeMs) {
     const url = `${this.baseUrl}/webapi/entry.cgi?api=SYNO.FileStation.Upload&version=2&method=upload&_sid=${encodeURIComponent(this.sid)}`;
     const boundary = "----SynoSyncFormBoundary" + Math.random().toString(36).substring(2);
     const safeFileName = fileName.replace(/[\r\n]/g, "").replace(/"/g, '\\"');
+    let mtimePart = "";
+    if (typeof mtimeMs === "number" && mtimeMs > 0) {
+      const sec = Math.floor(mtimeMs > 1e10 ? mtimeMs / 1e3 : mtimeMs);
+      mtimePart = `--${boundary}\r
+Content-Disposition: form-data; name="mtime"\r
+\r
+${sec}\r
+`;
+    }
     const encoder = new TextEncoder();
     const prefix = `--${boundary}\r
 Content-Disposition: form-data; name="api"\r
@@ -573,7 +619,7 @@ true\r
 Content-Disposition: form-data; name="overwrite"\r
 \r
 true\r
---${boundary}\r
+` + mtimePart + `--${boundary}\r
 Content-Disposition: form-data; name="file"; filename="${safeFileName}"\r
 Content-Type: application/octet-stream\r
 \r
@@ -668,11 +714,13 @@ function isIgnored(path, ignorePatterns) {
 function normalizeMtime(mtime) {
   return Math.floor(mtime > 1e10 ? mtime / 1e3 : mtime);
 }
-function computeDiff(localFiles, remoteFiles, ignorePatterns) {
+function computeDiff(localFiles, remoteFiles, ignorePatterns, lastSyncIndex) {
   const result = {
     uploads: [],
     downloads: [],
     conflicts: [],
+    deletesRemote: [],
+    deletesLocal: [],
     skips: []
   };
   const localMap = /* @__PURE__ */ new Map();
@@ -689,17 +737,49 @@ function computeDiff(localFiles, remoteFiles, ignorePatterns) {
   }
   for (const [path, local] of localMap.entries()) {
     const remote = remoteMap.get(path);
+    const last = lastSyncIndex?.[path];
     if (!remote) {
-      result.uploads.push({ path, action: "upload", local });
+      if (last) {
+        const localMtimeSec = normalizeMtime(local.mtime);
+        const lastLocalMtimeSec = normalizeMtime(last.localMtime);
+        const localModified = Math.abs(localMtimeSec - lastLocalMtimeSec) > 2 || local.size !== last.size;
+        if (!localModified) {
+          result.deletesLocal.push({ path, action: "delete_local", local, reason: "Deleted on remote" });
+        } else {
+          result.uploads.push({ path, action: "upload", local, reason: "Modified locally after remote deletion" });
+        }
+      } else {
+        result.uploads.push({ path, action: "upload", local, reason: "New local file" });
+      }
     } else {
       if (local.md5 && remote.md5 && local.md5 === remote.md5) {
         result.skips.push({ path, action: "skip", local, remote, reason: "Identical MD5" });
+        continue;
+      }
+      const localMtimeSec = normalizeMtime(local.mtime);
+      const remoteMtimeSec = normalizeMtime(remote.mtime);
+      if (last) {
+        const lastLocalMtimeSec = normalizeMtime(last.localMtime);
+        const lastRemoteMtimeSec = normalizeMtime(last.remoteMtime);
+        const localChanged = (Math.abs(localMtimeSec - lastLocalMtimeSec) > 2 || local.size !== last.size) && !(local.md5 && last.md5 && local.md5 === last.md5);
+        const remoteChanged = (Math.abs(remoteMtimeSec - lastRemoteMtimeSec) > 2 || remote.size !== last.size) && !(remote.md5 && last.md5 && remote.md5 === last.md5);
+        if (!localChanged && !remoteChanged) {
+          result.skips.push({ path, action: "skip", local, remote, reason: "Neither modified since last sync" });
+        } else if (localChanged && !remoteChanged) {
+          result.uploads.push({ path, action: "upload", local, remote, reason: "Local modified since last sync" });
+        } else if (!localChanged && remoteChanged) {
+          result.downloads.push({ path, action: "download", local, remote, reason: "Remote modified since last sync" });
+        } else {
+          if (Math.abs(localMtimeSec - remoteMtimeSec) <= 2 && local.size === remote.size) {
+            result.skips.push({ path, action: "skip", local, remote, reason: "Both modified to identical size and timestamp" });
+          } else {
+            result.conflicts.push({ path, action: "conflict", local, remote, reason: "Concurrent modification on both sides" });
+          }
+        }
       } else {
-        const localMtime = normalizeMtime(local.mtime);
-        const remoteMtime = normalizeMtime(remote.mtime);
-        if (localMtime > remoteMtime + 2) {
+        if (localMtimeSec > remoteMtimeSec + 2) {
           result.uploads.push({ path, action: "upload", local, remote, reason: "Local newer" });
-        } else if (remoteMtime > localMtime + 2) {
+        } else if (remoteMtimeSec > localMtimeSec + 2) {
           result.downloads.push({ path, action: "download", local, remote, reason: "Remote newer" });
         } else {
           if (local.md5 && remote.md5) {
@@ -716,58 +796,107 @@ function computeDiff(localFiles, remoteFiles, ignorePatterns) {
     }
   }
   for (const [path, remote] of remoteMap.entries()) {
-    if (!localMap.has(path)) {
-      result.downloads.push({ path, action: "download", remote });
+    if (localMap.has(path))
+      continue;
+    const last = lastSyncIndex?.[path];
+    if (last) {
+      const remoteMtimeSec = normalizeMtime(remote.mtime);
+      const lastRemoteMtimeSec = normalizeMtime(last.remoteMtime);
+      const remoteModified = Math.abs(remoteMtimeSec - lastRemoteMtimeSec) > 2 || remote.size !== last.size;
+      if (!remoteModified) {
+        result.deletesRemote.push({ path, action: "delete_remote", remote, reason: "Deleted on local" });
+      } else {
+        result.downloads.push({ path, action: "download", remote, reason: "Modified on remote after local deletion" });
+      }
+    } else {
+      result.downloads.push({ path, action: "download", remote, reason: "New remote file" });
     }
   }
   return result;
 }
 
 // src/sync/sync-manager.ts
+var CONCURRENCY_LIMIT = 3;
+async function runConcurrent(items, limit, fn) {
+  if (items.length === 0)
+    return;
+  const queue = [...items];
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (queue.length > 0) {
+      const item = queue.shift();
+      if (item !== void 0) {
+        await fn(item);
+      }
+    }
+  });
+  await Promise.all(workers);
+}
 var SyncManager = class {
-  constructor(client, vault, remoteRoot) {
+  constructor(client, vault, remoteRoot, currentIndex) {
     this.isRunning = false;
     this.client = client;
     this.vault = vault;
     this.remoteRoot = remoteRoot.replace(/\/+$/, "");
+    this.currentIndex = currentIndex ? { ...currentIndex } : {};
   }
   async executeSync(diff) {
     if (this.isRunning) {
       throw new Error("Sync is already in progress.");
     }
     this.isRunning = true;
+    const updatedIndex = { ...this.currentIndex };
     const report = {
       uploadedCount: 0,
       downloadedCount: 0,
       conflictCount: 0,
-      errors: []
+      deletedRemoteCount: 0,
+      deletedLocalCount: 0,
+      errors: [],
+      updatedIndex
     };
     try {
       const uploads = diff.uploads || [];
-      for (const item of uploads) {
+      await runConcurrent(uploads, CONCURRENCY_LIMIT, async (item) => {
         try {
           const content = await this.vault.readBinary(item.path);
           const slashIdx = item.path.lastIndexOf("/");
           const folder = slashIdx !== -1 ? `${this.remoteRoot}/${item.path.substring(0, slashIdx)}` : this.remoteRoot;
           const fileName = slashIdx !== -1 ? item.path.substring(slashIdx + 1) : item.path;
-          await this.client.uploadFile(folder, fileName, content);
+          if (item.local?.mtime !== void 0) {
+            await this.client.uploadFile(folder, fileName, content, item.local.mtime);
+          } else {
+            await this.client.uploadFile(folder, fileName, content);
+          }
           report.uploadedCount++;
+          const mtime = item.local?.mtime || Date.now();
+          updatedIndex[item.path] = {
+            localMtime: mtime,
+            remoteMtime: mtime,
+            size: content.byteLength,
+            md5: item.local?.md5
+          };
         } catch (e) {
           report.errors.push({ path: item.path, error: e.message || String(e) });
         }
-      }
+      });
       const downloads = diff.downloads || [];
-      for (const item of downloads) {
+      await runConcurrent(downloads, CONCURRENCY_LIMIT, async (item) => {
         if (!item.remote)
-          continue;
+          return;
         try {
           const content = await this.client.downloadFile(item.remote.fullRemotePath);
           await this.vault.writeBinaryAtomic(item.path, content);
           report.downloadedCount++;
+          updatedIndex[item.path] = {
+            localMtime: item.remote.mtime,
+            remoteMtime: item.remote.mtime,
+            size: content.byteLength,
+            md5: item.remote.md5
+          };
         } catch (e) {
           report.errors.push({ path: item.path, error: e.message || String(e) });
         }
-      }
+      });
       const conflicts = diff.conflicts || [];
       for (const item of conflicts) {
         if (!item.remote)
@@ -788,6 +917,38 @@ var SyncManager = class {
           report.errors.push({ path: item.path, error: e.message || String(e) });
         }
       }
+      const deletesRemote = diff.deletesRemote || [];
+      for (const item of deletesRemote) {
+        try {
+          const fullPath = item.remote?.fullRemotePath || `${this.remoteRoot}/${item.path}`;
+          await this.client.deleteFile(fullPath);
+          delete updatedIndex[item.path];
+          report.deletedRemoteCount++;
+        } catch (e) {
+          report.errors.push({ path: item.path, error: e.message || String(e) });
+        }
+      }
+      const deletesLocal = diff.deletesLocal || [];
+      for (const item of deletesLocal) {
+        try {
+          await this.vault.deleteFile(item.path);
+          delete updatedIndex[item.path];
+          report.deletedLocalCount++;
+        } catch (e) {
+          report.errors.push({ path: item.path, error: e.message || String(e) });
+        }
+      }
+      const skips = diff.skips || [];
+      for (const item of skips) {
+        if (!updatedIndex[item.path] && item.local && item.remote) {
+          updatedIndex[item.path] = {
+            localMtime: item.local.mtime,
+            remoteMtime: item.remote.mtime,
+            size: item.local.size,
+            md5: item.local.md5 || item.remote.md5
+          };
+        }
+      }
     } finally {
       this.isRunning = false;
     }
@@ -800,8 +961,10 @@ var SynologySyncPlugin = class extends import_obsidian2.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
+    this.syncIndex = {};
     this.isSyncing = false;
     this.syncIntervalId = null;
+    this.activeClient = null;
   }
   async onload() {
     await this.loadSettings();
@@ -831,11 +994,11 @@ var SynologySyncPlugin = class extends import_obsidian2.Plugin {
         }
       }
     });
-    if (this.settings.autoSyncOnStartup) {
-      setTimeout(() => {
+    this.app.workspace.onLayoutReady(() => {
+      if (this.settings.autoSyncOnStartup) {
         this.runSync().catch(console.error);
-      }, 2e3);
-    }
+      }
+    });
     this.setupSyncInterval();
   }
   onunload() {
@@ -843,13 +1006,33 @@ var SynologySyncPlugin = class extends import_obsidian2.Plugin {
       window.clearInterval(this.syncIntervalId);
       this.syncIntervalId = null;
     }
+    if (this.activeClient) {
+      this.activeClient.logout().catch(console.error);
+      this.activeClient = null;
+    }
     this.setStatusBar("offline");
   }
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const data = await this.loadData();
+    if (data) {
+      this.settings = Object.assign({}, DEFAULT_SETTINGS, data.settings || data);
+      this.syncIndex = data.syncIndex || {};
+    } else {
+      this.settings = Object.assign({}, DEFAULT_SETTINGS);
+      this.syncIndex = {};
+    }
   }
   async saveSettings() {
-    await this.saveData(this.settings);
+    await this.saveData({
+      settings: this.settings,
+      syncIndex: this.syncIndex
+    });
+  }
+  resetActiveSession() {
+    if (this.activeClient) {
+      this.activeClient.logout().catch(console.error);
+      this.activeClient = null;
+    }
   }
   setupSyncInterval() {
     if (this.syncIntervalId !== null) {
@@ -860,7 +1043,6 @@ var SynologySyncPlugin = class extends import_obsidian2.Plugin {
       this.syncIntervalId = window.setInterval(() => {
         this.runSync().catch(console.error);
       }, this.settings.syncIntervalMinutes * 60 * 1e3);
-      this.registerInterval(this.syncIntervalId);
     }
   }
   setStatusBar(state, text) {
@@ -881,44 +1063,44 @@ var SynologySyncPlugin = class extends import_obsidian2.Plugin {
   parseJsonResponse(res) {
     if (typeof res.text === "string" && res.text.trim()) {
       try {
-        return JSON.parse(res.text);
+        return JSON.parse(res.text.trim());
       } catch {
       }
     }
-    try {
-      return res.json ?? null;
-    } catch {
-      return null;
-    }
+    return res.json;
   }
   createResolver() {
-    const pingFn = async (url, timeoutMs) => {
-      const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(false), timeoutMs || 1500));
+    const pingFn = async (url) => {
+      let timeoutHandle = null;
+      const timeoutPromise = new Promise((resolve) => {
+        timeoutHandle = setTimeout(() => resolve(false), 2e3);
+      });
       const pingPromise = (async () => {
         try {
           const res = await (0, import_obsidian2.requestUrl)({
-            url: `${url}/webman/pingpong.cgi?action=cors&quickconnect=true`,
+            url: `${url}/webapi/entry.cgi?api=SYNO.API.Info&version=1&method=query&query=SYNO.API.Auth`,
             method: "GET",
             throw: false
           });
-          if (res.status === 200) {
-            const data = this.parseJsonResponse(res);
-            if (data && (data.success === true || Boolean(data.ezid))) {
-              return true;
-            }
-          }
-          const fallback = await (0, import_obsidian2.requestUrl)({
-            url: `${url}/webapi/query.cgi?api=SYNO.API.Info&version=1&method=query&query=SYNO.API.Auth`,
-            method: "GET",
-            throw: false
-          });
-          if (fallback.status === 200) {
+          const data = this.parseJsonResponse(res);
+          if (data && data.success === true)
+            return true;
+          if (res.status === 200 || res.status === 404 || res.status === 302) {
+            const fallback = await (0, import_obsidian2.requestUrl)({
+              url: `${url}/webapi/auth.cgi?api=SYNO.API.Auth&version=1&method=query`,
+              method: "GET",
+              throw: false
+            });
             const fbData = this.parseJsonResponse(fallback);
             return Boolean(fbData && fbData.success === true);
           }
           return false;
         } catch {
           return false;
+        } finally {
+          if (timeoutHandle !== null) {
+            clearTimeout(timeoutHandle);
+          }
         }
       })();
       return Promise.race([pingPromise, timeoutPromise]);
@@ -994,7 +1176,7 @@ var SynologySyncPlugin = class extends import_obsidian2.Plugin {
       deleteFile: async (path) => {
         const file = this.app.vault.getAbstractFileByPath((0, import_obsidian2.normalizePath)(path));
         if (file instanceof import_obsidian2.TFile) {
-          await this.app.vault.delete(file);
+          await this.app.vault.trash(file, true);
         }
       }
     };
@@ -1006,6 +1188,18 @@ var SynologySyncPlugin = class extends import_obsidian2.Plugin {
       mtime: f.stat.mtime,
       size: f.stat.size
     }));
+  }
+  async getAuthenticatedClient() {
+    if (this.activeClient && this.activeClient.getSid()) {
+      return this.activeClient;
+    }
+    const http = this.getHttpRequester();
+    const resolver = this.createResolver();
+    const baseUrl = await resolver.resolveBaseUrl(this.settings.quickConnectId, this.settings.lanAddress);
+    const client = new SynologyApiClient(baseUrl, http);
+    await client.login(this.settings.account, this.settings.password);
+    this.activeClient = client;
+    return client;
   }
   async testConnection() {
     if (!this.settings.quickConnectId && !this.settings.lanAddress) {
@@ -1043,34 +1237,47 @@ var SynologySyncPlugin = class extends import_obsidian2.Plugin {
     }
     this.isSyncing = true;
     this.setStatusBar("syncing");
-    let client = null;
     try {
-      const http = this.getHttpRequester();
-      const resolver = this.createResolver();
-      const baseUrl = await resolver.resolveBaseUrl(this.settings.quickConnectId, this.settings.lanAddress);
-      client = new SynologyApiClient(baseUrl, http);
-      await client.login(this.settings.account, this.settings.password);
+      let client = await this.getAuthenticatedClient();
+      let remoteFiles;
       try {
-        const remoteFiles = await client.listFiles(this.settings.remotePath);
-        const localFiles = await this.getLocalFiles();
-        const diff = computeDiff(localFiles, remoteFiles, this.settings.ignorePatterns);
-        const manager = new SyncManager(client, this.getVaultAdapter(), this.settings.remotePath);
-        const report = await manager.executeSync(diff);
-        if (report.errors.length > 0) {
-          this.setStatusBar("partial-error");
-          new import_obsidian2.Notice(`Sync finished with errors: \u2191${report.uploadedCount} \u2193${report.downloadedCount} \u26A1${report.conflictCount} \u274C${report.errors.length} failed. Check console for details.`);
-          console.warn("[SynologySync] Sync completed with errors:", report.errors);
+        remoteFiles = await client.listFiles(this.settings.remotePath);
+      } catch (err) {
+        const errMsg = String(err?.message || err);
+        const isSessionExpired = errMsg.includes("105") || errMsg.includes("106") || errMsg.includes("107") || errMsg.includes("119");
+        if (isSessionExpired) {
+          this.activeClient = null;
+          client = await this.getAuthenticatedClient();
+          remoteFiles = await client.listFiles(this.settings.remotePath);
         } else {
-          this.setStatusBar("idle", "Synced");
-          new import_obsidian2.Notice(`Sync Done: \u2191${report.uploadedCount} \u2193${report.downloadedCount} \u26A1${report.conflictCount}`);
+          throw err;
         }
-      } finally {
-        await client.logout().catch(console.error);
+      }
+      const localFiles = await this.getLocalFiles();
+      const diff = computeDiff(localFiles, remoteFiles, this.settings.ignorePatterns, this.syncIndex);
+      const manager = new SyncManager(client, this.getVaultAdapter(), this.settings.remotePath, this.syncIndex);
+      const report = await manager.executeSync(diff);
+      if (report.updatedIndex) {
+        this.syncIndex = report.updatedIndex;
+        await this.saveSettings();
+      }
+      if (report.errors.length > 0) {
+        this.setStatusBar("partial-error");
+        new import_obsidian2.Notice(
+          `Sync finished with errors: \u2191${report.uploadedCount} \u2193${report.downloadedCount} \u26A1${report.conflictCount} \u{1F5D1}\uFE0F${report.deletedRemoteCount + report.deletedLocalCount} \u274C${report.errors.length} failed.`
+        );
+        console.warn("[SynologySync] Sync completed with errors:", report.errors);
+      } else {
+        this.setStatusBar("idle", "Synced");
+        new import_obsidian2.Notice(
+          `Sync Done: \u2191${report.uploadedCount} \u2193${report.downloadedCount} \u26A1${report.conflictCount} \u{1F5D1}\uFE0F${report.deletedRemoteCount + report.deletedLocalCount}`
+        );
       }
     } catch (e) {
       this.setStatusBar("error");
       new import_obsidian2.Notice(`Sync Failed: ${e.message || e}`);
       console.error("[SynologySync]", e);
+      this.activeClient = null;
     } finally {
       this.isSyncing = false;
     }

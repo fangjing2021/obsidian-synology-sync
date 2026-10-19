@@ -35,20 +35,35 @@ export class SynologyApiClient {
   }
 
   async login(account: string, passwd: string, otpCode?: string): Promise<string> {
-    const buildAuthUrl = (version: number) => {
-      let u = `${this.baseUrl}/webapi/auth.cgi?api=SYNO.API.Auth&version=${version}&method=login&account=${encodeURIComponent(account)}&passwd=${encodeURIComponent(passwd)}&session=FileStation&format=sid`;
+    const buildAuthBody = (version: number) => {
+      let params = `api=SYNO.API.Auth&version=${version}&method=login&account=${encodeURIComponent(account)}&passwd=${encodeURIComponent(passwd)}&session=FileStation&format=sid`;
       if (otpCode) {
-        u += `&otp_code=${encodeURIComponent(otpCode)}`;
+        params += `&otp_code=${encodeURIComponent(otpCode)}`;
       }
-      return u;
+      return params;
     };
 
-    let res = await this.http({ url: buildAuthUrl(6), method: 'GET' });
+    const url = `${this.baseUrl}/webapi/auth.cgi`;
+    let res = await this.http({
+      url,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: buildAuthBody(6),
+    });
     let json = res.json;
 
     // 若旧版 DSM 不支持 version=6 (错误码 104)，自动降级为 version=3 重试
     if (json && !json.success && json.error?.code === 104) {
-      res = await this.http({ url: buildAuthUrl(3), method: 'GET' });
+      res = await this.http({
+        url,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: buildAuthBody(3),
+      });
       json = res.json;
     }
 
@@ -84,7 +99,8 @@ export class SynologyApiClient {
     remoteVaultRoot: string,
     currentFolder?: string,
     depth = 0,
-    visitedPaths: Set<string> = new Set<string>()
+    visitedPaths: Set<string> = new Set<string>(),
+    relativeDir = ''
   ): Promise<RemoteFileItem[]> {
     const cleanRoot = remoteVaultRoot.replace(/\/+$/, '');
     const folderToQuery = currentFolder ? currentFolder.replace(/\/+$/, '') : cleanRoot;
@@ -131,8 +147,18 @@ export class SynologyApiClient {
 
     for (const f of allRawFiles) {
       const fullPath: string = f.path;
-      // Calculate relative path
-      let relPath = fullPath.startsWith(cleanRoot) ? fullPath.slice(cleanRoot.length) : fullPath;
+      // 优先基于相对父目录与文件名拼接，彻底规避 /home 与 /homes 及大小写不一致问题
+      let relPath = '';
+      if (f.name) {
+        relPath = relativeDir ? `${relativeDir}/${f.name}` : f.name;
+      } else {
+        // 后备前缀截取（忽略大小写）
+        if (fullPath.toLowerCase().startsWith(cleanRoot.toLowerCase())) {
+          relPath = fullPath.slice(cleanRoot.length);
+        } else {
+          relPath = fullPath;
+        }
+      }
       relPath = relPath.replace(/^\/+/, '');
 
       results.push({
@@ -145,7 +171,7 @@ export class SynologyApiClient {
       });
 
       if (f.isdir) {
-        const subFiles = await this.listFiles(remoteVaultRoot, fullPath, depth + 1, visitedPaths);
+        const subFiles = await this.listFiles(remoteVaultRoot, fullPath, depth + 1, visitedPaths, relPath);
         results = results.concat(subFiles);
       }
     }
@@ -153,12 +179,19 @@ export class SynologyApiClient {
     return results;
   }
 
-  async uploadFile(targetFolder: string, fileName: string, content: ArrayBuffer): Promise<void> {
+  async uploadFile(targetFolder: string, fileName: string, content: ArrayBuffer, mtimeMs?: number): Promise<void> {
     const url = `${this.baseUrl}/webapi/entry.cgi?api=SYNO.FileStation.Upload&version=2&method=upload&_sid=${encodeURIComponent(this.sid)}`;
     const boundary = '----SynoSyncFormBoundary' + Math.random().toString(36).substring(2);
 
     // 对文件名进行安全性转义，防止破坏 multipart 边界
     const safeFileName = fileName.replace(/[\r\n]/g, '').replace(/"/g, '\\"');
+
+    let mtimePart = '';
+    if (typeof mtimeMs === 'number' && mtimeMs > 0) {
+      // 群晖 FileStation Upload API 支持秒级或毫秒级时间戳
+      const sec = Math.floor(mtimeMs > 10000000000 ? mtimeMs / 1000 : mtimeMs);
+      mtimePart = `--${boundary}\r\nContent-Disposition: form-data; name="mtime"\r\n\r\n${sec}\r\n`;
+    }
 
     // Build multipart body
     const encoder = new TextEncoder();
@@ -177,6 +210,7 @@ export class SynologyApiClient {
       `Content-Disposition: form-data; name="create_parents"\r\n\r\ntrue\r\n` +
       `--${boundary}\r\n` +
       `Content-Disposition: form-data; name="overwrite"\r\n\r\ntrue\r\n` +
+      mtimePart +
       `--${boundary}\r\n` +
       `Content-Disposition: form-data; name="file"; filename="${safeFileName}"\r\n` +
       `Content-Type: application/octet-stream\r\n\r\n`;

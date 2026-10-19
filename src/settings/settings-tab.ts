@@ -24,6 +24,7 @@ export class SynologySyncSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.quickConnectId)
         .onChange(async (value) => {
           this.plugin.settings.quickConnectId = value.trim();
+          this.plugin.resetActiveSession();
           await this.plugin.saveSettings();
         }));
 
@@ -35,6 +36,7 @@ export class SynologySyncSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.lanAddress)
         .onChange(async (value) => {
           this.plugin.settings.lanAddress = value.trim();
+          this.plugin.resetActiveSession();
           await this.plugin.saveSettings();
         }));
 
@@ -46,6 +48,7 @@ export class SynologySyncSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.account)
         .onChange(async (value) => {
           this.plugin.settings.account = value.trim();
+          this.plugin.resetActiveSession();
           await this.plugin.saveSettings();
         }));
 
@@ -59,6 +62,7 @@ export class SynologySyncSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.password)
           .onChange(async (value) => {
             this.plugin.settings.password = value;
+            this.plugin.resetActiveSession();
             await this.plugin.saveSettings();
           });
       });
@@ -71,6 +75,7 @@ export class SynologySyncSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.remotePath)
         .onChange(async (value) => {
           this.plugin.settings.remotePath = value.trim();
+          this.plugin.resetActiveSession();
           await this.plugin.saveSettings();
         }));
 
@@ -120,5 +125,23 @@ export class SynologySyncSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
           this.plugin.setupSyncInterval();
         }));
+
+    new Setting(containerEl)
+      .setName('Ignore Patterns')
+      .setDesc('Paths or wildcard patterns to ignore during sync (one pattern per line). Supported: *.tmp, folder/**, ._*')
+      .addTextArea(text => {
+        text.inputEl.rows = 6;
+        text.inputEl.cols = 40;
+        text
+          .setPlaceholder('.obsidian/**\n.git/**\n*.tmp\n.DS_Store')
+          .setValue((this.plugin.settings.ignorePatterns || []).join('\n'))
+          .onChange(async (value) => {
+            this.plugin.settings.ignorePatterns = value
+              .split('\n')
+              .map(line => line.trim())
+              .filter(line => line.length > 0);
+            await this.plugin.saveSettings();
+          });
+      });
   }
 }

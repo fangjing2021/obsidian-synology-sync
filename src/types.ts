@@ -21,8 +21,8 @@ export const DEFAULT_SETTINGS: SynoSyncSettings = {
     '.DS_Store',
     'Thumbs.db',
     'desktop.ini',
-    '.obsidian/workspace.json',
-    '.obsidian/cache/**',
+    '.obsidian/**',
+    '.git/**',
     '*.tmp',
     '*.syno_download.tmp'
   ],
@@ -54,9 +54,20 @@ export interface SyncActionItem {
   reason?: string;
 }
 
+export interface SyncIndexEntry {
+  localMtime: number;
+  remoteMtime: number;
+  size: number;
+  md5?: string;
+}
+
+export type SyncIndex = Record<string, SyncIndexEntry>;
+
 export interface DiffResult {
   uploads: SyncActionItem[];
   downloads: SyncActionItem[];
   conflicts: SyncActionItem[];
+  deletesRemote: SyncActionItem[];
+  deletesLocal: SyncActionItem[];
   skips: SyncActionItem[];
 }
