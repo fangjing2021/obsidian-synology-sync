@@ -92,4 +92,4 @@ npm run build
 根据项目维护准则：
 - 每次更新发布必须递增 `manifest.json` 与 `package.json` 中的版本号。
 - 作者元数据固定保持为 `"fang"`。
-- 更新说明同步记录在 `CHANGELOG.md` 并同步至 Obsidian 笔记库。
+- 更新说明同步记录在 `CHANGELOG.md`。
