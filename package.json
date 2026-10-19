@@ -1,0 +1,24 @@
+{
+  "name": "obsidian-synology-sync",
+  "version": "1.1.1",
+  "description": "Sync Obsidian vault with Synology NAS via File Station Web API and QuickConnect",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": ["obsidian", "plugin", "synology", "nas", "sync", "quickconnect"],
+  "author": "fang",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "builtin-modules": "^4.0.0",
+    "esbuild": "^0.20.0",
+    "obsidian": "latest",
+    "tslib": "^2.6.2",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
+  }
+}

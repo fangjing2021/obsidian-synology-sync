@@ -1,0 +1,10 @@
+node_modules/
+.superpowers/
+.agents/
+.DS_Store
+.backup/
+docs/
+Synology Sync 项目资料
+obsidian-multi-agent-memory-design.md
+tests/
+vitest.config.ts

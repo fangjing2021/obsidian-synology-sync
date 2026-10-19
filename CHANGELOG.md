@@ -1,0 +1,61 @@
+# Synology Sync (obsidian-synology-sync) 项目开发与更新日志
+
+- **项目名称**：Synology Sync (`obsidian-synology-sync`)
+- **作者**：`fang`
+- **当前版本**：`v1.1.1`
+- **项目源码路径**：`/Users/fj 1/Desktop/obsindiantodsm`
+- **群晖同步目标路径**：`/homes/username/ObsidianVault`
+
+---
+
+## 一、项目架构与核心特性
+
+1. **群晖服务端零改动**：
+   - 100% 基于群晖 DSM 原生内置的 **File Station Web API**（`SYNO.API.Auth`、`SYNO.FileStation.List`、`Upload`、`Download`、`Delete`），无需在 NAS 上部署 Docker、WebDAV 或第三方服务。
+2. **全平台原生支持（Mac / Windows / iOS / Android）**：
+   - 网络层统一采用 Obsidian 原生 `requestUrl` 接口，完全规避 CORS 跨域限制与移动端兼容性问题。
+3. **局域网与外网 QuickConnect 双模自适应穿透**：
+   - **回家局域网直连**：自动探测局域网 IP（如 `192.168.1.100:5000`），享受千兆内网同步速度；
+   - **外网 QuickConnect 官方中继穿透**：不在局域网时自动静默跳过内网地址，通过 `global.quickconnect.cn/Serv.php` 跟随 `sites` 区域重定向至 `cnc.quickconnect.cn`，自动识别或通过 `request_tunnel` 唤醒群晖官方 HTTPS 中继隧道（如 `https://my-nas.cn4.quickconnect.cn`）。
+4. **安全双向增量同步与冲突保护**：
+   - 基于文件修改时间 (`mtime`) 与大小进行增量比对；
+   - 多端同时修改同一笔记时自动生成带时间戳的冲突副本（`*.conflict-<timestamp>.md`），绝不静默覆盖丢失数据。
+
+---
+
+## 二、版本更新日志 (Changelog)
+
+### [v1.1.1] - 2026-10-15
+- **稳定性与安全性修复（深度代码审查评估落地）**：
+  - **大目录官方分页支持 (`SYNO.FileStation.List`)**：支持 `offset`、`limit` 与 `total` 自动循环拉取，彻底解决单目录条目超过 1000 时远端文件被截断导致的同步遗漏隐患。
+  - **目录递归保护**：为远端目录遍历增加最大深度保护（30 层）与访问路径防环检测（Set），规避极端情况下因符号链接成环造成的死循环与调用栈溢出。
+  - **文件名注入防护**：在 `uploadFile` 中对文件名进行换行符过滤及双引号转义，避免特殊字符破坏 `multipart/form-data` 请求边界。
+  - **同步删除机制优化**：`deleteFile` 切换为群晖官方推荐的同步方法（`method=delete`），确保文件即时完成删除操作。
+  - **前置配置校验**：在执行同步或连接测试前验证 QuickConnect/局域网地址及账号密码完整性，缺失时提供友好中文提示。
+  - **设置项文案真实透明化**：修正密码存储说明，明确指出密码保存在本地设备的 `data.json` 中，消除“加密”误导。
+  - **单元测试补充**：新增分页、深度防环、文件名转义等单测用例，测试用例增加至 60 项且全部通过。
+
+### [v1.1.0] - 2026-10-13
+- **作者信息更新**：将插件作者统一更新为 **`fang`**（`manifest.json` & `package.json`）。
+- **新增：完整支持群晖 QuickConnect 外网中继隧道 (`request_tunnel` & `sites` 重定向)**：
+  - 修复在外网环境下无法通过 QuickConnect 穿透访问群晖 DSM API 的问题；
+  - 支持自动跟随 `errno: 4` 的区域控制节点重定向（`global.quickconnect.cn` -> `cnc.quickconnect.cn`）；
+  - 严格控制 `Serv.php` 请求体大小（仅发送 `mainapp_https` 与 `mainapp_http` 2 项），规避群晖 Nginx 网关的 `HTTP 413 Payload Too Large` 限制；
+  - 精确绑定活动隧道项对应的 `relay_region`（如 `cn4`），避免被无隧道项的泛区域标识（`cn`）覆盖。
+- **修复：探活校验与 `text/plain` JSON 解析**：
+  - 使用 `/webman/pingpong.cgi?action=cors&quickconnect=true` 并严格校验返回 JSON 中的 `success: true` / `ezid`，防止将静态 HTML 引导页误判为可用节点；
+  - 优先使用 `JSON.parse(res.text)` 解析响应，兼容群晖返回 `content-type: text/plain` 的 JSON 数据。
+- **修复：DSM 7 `SYNO.API.Auth` 与 `SYNO.FileStation.Upload` 接口规范适配**：
+  - 修复 `auth.cgi` 在参数位于 URL Query 时使用 `POST` 空请求体导致群晖返回 `Error code: 101` 的问题，统一改为 `GET` 请求；
+  - 为 `uploadFile` 补齐 URL 路由参数（`?api=SYNO.FileStation.Upload&version=2&method=upload&_sid=...`），确保 DSM 7 `entry.cgi` 正常路由上传请求。
+- **修复：移除误导性的局域网报错提示**：
+  - 当处于外网环境时，不再弹出要求检查 `192.168.1.100` 局域网地址的误导提示。
+
+### [v1.0.0] - 2026-10-12
+- **初始版本发布**：
+  - 完成插件工程脚手架与 TypeScript + esbuild 单文件打包配置；
+  - 实现核心数据类型定义 (`src/types.ts`)；
+  - 实现双向增量差异比对引擎与 `.obsidian` 敏感配置忽略规则 (`src/sync/diff-engine.ts`)；
+  - 实现群晖 File Station Web API 客户端 (`src/syno/api-client.ts`)；
+  - 实现同步事务管理器与安全冲突副本保留策略 (`src/sync/sync-manager.ts`)；
+  - 实现 Obsidian 设置面板、侧边栏同步按钮、状态栏实时状态展示与定时自动同步 (`src/settings/settings-tab.ts`, `src/main.ts`)。
