@@ -208,6 +208,7 @@ export default class SynologySyncPlugin extends Plugin {
       const parsedJson = this.parseJsonResponse(res);
       return {
         status: res.status,
+        headers: res.headers,
         json: parsedJson,
         text: res.text,
         arrayBuffer: res.arrayBuffer,
@@ -365,8 +366,10 @@ export default class SynologySyncPlugin extends Plugin {
 
       if (report.errors.length > 0) {
         this.setStatusBar('partial-error');
+        const firstErr = report.errors[0] ? ` (${report.errors[0].error})` : '';
         new Notice(
-          `Sync finished with errors: ↑${report.uploadedCount} ↓${report.downloadedCount} ⚡${report.conflictCount} 🗑️${report.deletedRemoteCount + report.deletedLocalCount} ❌${report.errors.length} failed.`
+          `Sync finished with errors: ↑${report.uploadedCount} ↓${report.downloadedCount} ⚡${report.conflictCount} 🗑️${report.deletedRemoteCount + report.deletedLocalCount} ❌${report.errors.length} failed.${firstErr}`,
+          10000
         );
         console.warn('[SynologySync] Sync completed with errors:', report.errors);
       } else {

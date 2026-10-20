@@ -1,9 +1,9 @@
 # Synology Sync for Obsidian (`obsidian-synology-sync`)
 
-[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-1.2.1-blue.svg)](package.json)
 [![Author](https://img.shields.io/badge/author-fang-orange.svg)](manifest.json)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-71%2F71%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-73%2F73%20passing-brightgreen.svg)](tests/)
 
 一套专为 Obsidian 用户量身打造的**私有化、全平台兼容、服务端 0 部署**的群晖 NAS 双向同步插件。通过 DSM 原生 File Station Web API 和 QuickConnect 官方中继穿透技术，实现内网极速直连、外网无公网 IP 自动穿透的无缝同步体验。
 
@@ -51,7 +51,7 @@ obsindiantodsm/
 │       └── settings-tab.ts         # Obsidian 设置面板 UI
 ├── CHANGELOG.md                    # 版本更新与开发日志
 ├── package.json                    # npm 依赖与构建脚本
-├── manifest.json                   # Obsidian 插件元数据 (v1.2.0, author: fang)
+├── manifest.json                   # Obsidian 插件元数据 (v1.2.1, author: fang)
 └── esbuild.config.mjs              # 单文件打包配置
 ```
 

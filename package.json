@@ -1,6 +1,6 @@
 {
   "name": "obsidian-synology-sync",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Sync Obsidian vault with Synology NAS via File Station Web API and QuickConnect",
   "main": "main.js",
   "scripts": {

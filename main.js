@@ -649,16 +649,33 @@ Content-Type: application/octet-stream\r
     }
   }
   async downloadFile(fullRemotePath) {
-    const url = `${this.baseUrl}/webapi/entry.cgi?api=SYNO.FileStation.Download&version=2&method=download&path=${encodeURIComponent(fullRemotePath)}&mode=open&_sid=${this.sid}`;
-    const res = await this.http({ url, method: "GET" });
-    if (res.json && res.json.success === false) {
-      const code = res.json?.error?.code || "unknown";
-      throw new Error(`Failed to download ${fullRemotePath} (Error code: ${code})`);
+    let url = `${this.baseUrl}/webapi/entry.cgi?api=SYNO.FileStation.Download&version=2&method=download&path=${encodeURIComponent(fullRemotePath)}&mode=open&_sid=${this.sid}`;
+    let redirectCount = 0;
+    const maxRedirects = 5;
+    while (redirectCount < maxRedirects) {
+      const res = await this.http({ url, method: "GET" });
+      if (res.json && res.json.success === false) {
+        const code = res.json?.error?.code || "unknown";
+        throw new Error(`Failed to download ${fullRemotePath} (Error code: ${code})`);
+      }
+      if (res.status === 301 || res.status === 302 || res.status === 307 || res.status === 308) {
+        const location = res.headers?.["location"] || res.headers?.["Location"];
+        if (location) {
+          redirectCount++;
+          if (location.startsWith("http://") || location.startsWith("https://")) {
+            url = location;
+          } else {
+            url = `${this.baseUrl}${location.startsWith("/") ? "" : "/"}${location}`;
+          }
+          continue;
+        }
+      }
+      if (res.status !== 200) {
+        throw new Error(`Failed to download ${fullRemotePath} (Status: ${res.status})`);
+      }
+      return res.arrayBuffer || new ArrayBuffer(0);
     }
-    if (res.status !== 200 || !res.arrayBuffer) {
-      throw new Error(`Failed to download ${fullRemotePath} (Status: ${res.status})`);
-    }
-    return res.arrayBuffer;
+    throw new Error(`Too many redirects while downloading ${fullRemotePath}`);
   }
   async deleteFile(fullRemotePath) {
     const url = `${this.baseUrl}/webapi/entry.cgi?api=SYNO.FileStation.Delete&version=2&method=delete&path=${encodeURIComponent(fullRemotePath)}&_sid=${this.sid}`;
@@ -1134,6 +1151,7 @@ var SynologySyncPlugin = class extends import_obsidian2.Plugin {
       const parsedJson = this.parseJsonResponse(res);
       return {
         status: res.status,
+        headers: res.headers,
         json: parsedJson,
         text: res.text,
         arrayBuffer: res.arrayBuffer
@@ -1263,8 +1281,10 @@ var SynologySyncPlugin = class extends import_obsidian2.Plugin {
       }
       if (report.errors.length > 0) {
         this.setStatusBar("partial-error");
+        const firstErr = report.errors[0] ? ` (${report.errors[0].error})` : "";
         new import_obsidian2.Notice(
-          `Sync finished with errors: \u2191${report.uploadedCount} \u2193${report.downloadedCount} \u26A1${report.conflictCount} \u{1F5D1}\uFE0F${report.deletedRemoteCount + report.deletedLocalCount} \u274C${report.errors.length} failed.`
+          `Sync finished with errors: \u2191${report.uploadedCount} \u2193${report.downloadedCount} \u26A1${report.conflictCount} \u{1F5D1}\uFE0F${report.deletedRemoteCount + report.deletedLocalCount} \u274C${report.errors.length} failed.${firstErr}`,
+          1e4
         );
         console.warn("[SynologySync] Sync completed with errors:", report.errors);
       } else {

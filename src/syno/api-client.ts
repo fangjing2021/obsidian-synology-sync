@@ -9,6 +9,7 @@ export interface HttpRequestOptions {
 
 export interface HttpResponse {
   status: number;
+  headers?: Record<string, string>;
   json?: any;
   arrayBuffer?: ArrayBuffer;
   text?: string;
@@ -243,16 +244,38 @@ export class SynologyApiClient {
   }
 
   async downloadFile(fullRemotePath: string): Promise<ArrayBuffer> {
-    const url = `${this.baseUrl}/webapi/entry.cgi?api=SYNO.FileStation.Download&version=2&method=download&path=${encodeURIComponent(fullRemotePath)}&mode=open&_sid=${this.sid}`;
-    const res = await this.http({ url, method: 'GET' });
-    if (res.json && res.json.success === false) {
-      const code = res.json?.error?.code || 'unknown';
-      throw new Error(`Failed to download ${fullRemotePath} (Error code: ${code})`);
+    let url = `${this.baseUrl}/webapi/entry.cgi?api=SYNO.FileStation.Download&version=2&method=download&path=${encodeURIComponent(fullRemotePath)}&mode=open&_sid=${this.sid}`;
+    let redirectCount = 0;
+    const maxRedirects = 5;
+
+    while (redirectCount < maxRedirects) {
+      const res = await this.http({ url, method: 'GET' });
+      if (res.json && res.json.success === false) {
+        const code = res.json?.error?.code || 'unknown';
+        throw new Error(`Failed to download ${fullRemotePath} (Error code: ${code})`);
+      }
+
+      // 处理 HTTP 301 / 302 / 307 / 308 重定向（群晖 FileStation 下载文件流跳转）
+      if (res.status === 301 || res.status === 302 || res.status === 307 || res.status === 308) {
+        const location = res.headers?.['location'] || res.headers?.['Location'];
+        if (location) {
+          redirectCount++;
+          if (location.startsWith('http://') || location.startsWith('https://')) {
+            url = location;
+          } else {
+            url = `${this.baseUrl}${location.startsWith('/') ? '' : '/'}${location}`;
+          }
+          continue;
+        }
+      }
+
+      if (res.status !== 200) {
+        throw new Error(`Failed to download ${fullRemotePath} (Status: ${res.status})`);
+      }
+      return res.arrayBuffer || new ArrayBuffer(0);
     }
-    if (res.status !== 200 || !res.arrayBuffer) {
-      throw new Error(`Failed to download ${fullRemotePath} (Status: ${res.status})`);
-    }
-    return res.arrayBuffer;
+
+    throw new Error(`Too many redirects while downloading ${fullRemotePath}`);
   }
 
   async deleteFile(fullRemotePath: string): Promise<void> {

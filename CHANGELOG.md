@@ -2,7 +2,7 @@
 
 - **项目名称**：Synology Sync (`obsidian-synology-sync`)
 - **作者**：`fang`
-- **当前版本**：`v1.2.0`
+- **当前版本**：`v1.2.1`
 - **项目源码路径**：`/Users/fj 1/Desktop/obsindiantodsm`
 - **群晖同步目标路径**：`/homes/username/ObsidianVault`
 
@@ -25,6 +25,14 @@
 ---
 
 ## 二、版本更新日志 (Changelog)
+
+### [v1.2.1] - 2026-10-21
+- **关键修复：支持群晖 FileStation 下载 HTTP 302 重定向**：
+  - 修复通过 QuickConnect / 外网下载文件时，群晖底层生成的 302 临时文件流下载跳转未被自动跟随、导致全部文件下载报错（Status: 302 / ❌44 failed）的重大缺陷；
+  - `downloadFile` 自动跟随 301/302/307/308 重定向并解析 `Location` 头，彻底解决移动端首次同步批量拉取失败问题；
+  - 网络层 `HttpResponse` 增加 `headers` 支持，打通底层响应头获取；
+  - 优化同步弹窗通知（Notice），出现失败项时自动在弹窗展示首个错误详情，提升故障透明度；
+  - 单元测试扩充至 73 项（新增 302 重定向跟随及防死循环测试）全部通过。
 
 ### [v1.2.0] - 2026-10-19
 - **核心架构升级：3-Way 差异比对引擎与状态快照 (`lastSyncIndex`)**：

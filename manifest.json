@@ -1,7 +1,7 @@
 {
   "id": "obsidian-synology-sync",
   "name": "Synology Sync",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "minAppVersion": "0.15.0",
   "description": "Seamlessly sync your notes with Synology NAS via File Station Web API and QuickConnect.",
   "author": "fang",
