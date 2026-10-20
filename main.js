@@ -1082,9 +1082,14 @@ var SynologySyncPlugin = class extends import_obsidian2.Plugin {
       try {
         return JSON.parse(res.text.trim());
       } catch {
+        return void 0;
       }
     }
-    return res.json;
+    try {
+      return res.json;
+    } catch {
+      return void 0;
+    }
   }
   createResolver() {
     const pingFn = async (url) => {

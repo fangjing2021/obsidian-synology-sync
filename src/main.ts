@@ -133,10 +133,15 @@ export default class SynologySyncPlugin extends Plugin {
       try {
         return JSON.parse(res.text.trim());
       } catch {
-        // Fallback to res.json if text parse fails
+        // Response is binary or plain text (e.g. Markdown note), not JSON
+        return undefined;
       }
     }
-    return res.json;
+    try {
+      return res.json;
+    } catch {
+      return undefined;
+    }
   }
 
   private createResolver(): QuickConnectResolver {

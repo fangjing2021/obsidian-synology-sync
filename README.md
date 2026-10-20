@@ -1,6 +1,6 @@
 # Synology Sync for Obsidian (`obsidian-synology-sync`)
 
-[![Version](https://img.shields.io/badge/version-1.2.1-blue.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-1.2.2-blue.svg)](package.json)
 [![Author](https://img.shields.io/badge/author-fang-orange.svg)](manifest.json)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-73%2F73%20passing-brightgreen.svg)](tests/)
@@ -51,7 +51,7 @@ obsindiantodsm/
 │       └── settings-tab.ts         # Obsidian 设置面板 UI
 ├── CHANGELOG.md                    # 版本更新与开发日志
 ├── package.json                    # npm 依赖与构建脚本
-├── manifest.json                   # Obsidian 插件元数据 (v1.2.1, author: fang)
+├── manifest.json                   # Obsidian 插件元数据 (v1.2.2, author: fang)
 └── esbuild.config.mjs              # 单文件打包配置
 ```
 

@@ -2,7 +2,7 @@
 
 - **项目名称**：Synology Sync (`obsidian-synology-sync`)
 - **作者**：`fang`
-- **当前版本**：`v1.2.1`
+- **当前版本**：`v1.2.2`
 - **项目源码路径**：`/Users/fj 1/Desktop/obsindiantodsm`
 - **群晖同步目标路径**：`/homes/username/ObsidianVault`
 
@@ -25,6 +25,12 @@
 ---
 
 ## 二、版本更新日志 (Changelog)
+
+### [v1.2.2] - 2026-10-21
+- **关键修复：解决下载 Markdown/文本文件时触发 `Unexpected token` 语法解析异常**：
+  - 修复因 `parseJsonResponse` 回退至 `res.json` getter、导致普通文本（如 Markdown 标题行 `# ...`）被错误作为 JSON 解析而抛出 `Unexpected token '#', ... is not valid JSON` 异常的缺陷；
+  - 改造响应解析逻辑：当文本无法作为 JSON 解析时安全返回 `undefined`，杜绝调用抛出异常的内部 getter；
+  - 确保二进制文件流正常写入 Obsidian 库文件。
 
 ### [v1.2.1] - 2026-10-21
 - **关键修复：支持群晖 FileStation 下载 HTTP 302 重定向**：
