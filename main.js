@@ -60,7 +60,7 @@ var SynologySyncSettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Synology Sync Settings" });
+    containerEl.createEl("h2", { text: "Synology QuickSync Settings" });
     new import_obsidian.Setting(containerEl).setName("QuickConnect ID").setDesc("Your Synology QuickConnect ID (for external/WAN sync).").addText((text) => text.setPlaceholder("e.g. my-nas").setValue(this.plugin.settings.quickConnectId).onChange(async (value) => {
       this.plugin.settings.quickConnectId = value.trim();
       this.plugin.resetActiveSession();
@@ -988,18 +988,18 @@ var SynologySyncPlugin = class extends import_obsidian2.Plugin {
     this.addSettingTab(new SynologySyncSettingTab(this.app, this));
     this.statusBarEl = this.addStatusBarItem();
     this.setStatusBar("idle");
-    this.addRibbonIcon("refresh-cw", "Synology Sync", async () => {
+    this.addRibbonIcon("refresh-cw", "Synology QuickSync", async () => {
       await this.runSync();
     });
     this.addCommand({
-      id: "synology-sync-now",
+      id: "synology-quicksync-now",
       name: "Sync Now",
       callback: async () => {
         await this.runSync();
       }
     });
     this.addCommand({
-      id: "synology-sync-test-connection",
+      id: "synology-quicksync-test-connection",
       name: "Test Connection",
       callback: async () => {
         try {

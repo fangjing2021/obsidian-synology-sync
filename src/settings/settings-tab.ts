@@ -14,7 +14,7 @@ export class SynologySyncSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl('h2', { text: 'Synology Sync Settings' });
+    containerEl.createEl('h2', { text: 'Synology QuickSync Settings' });
 
     new Setting(containerEl)
       .setName('QuickConnect ID')

@@ -1,9 +1,8 @@
-# Synology Sync (obsidian-synology-sync) 项目开发与更新日志
+# Synology QuickSync (synology-quicksync) 项目开发与更新日志
 
-- **项目名称**：Synology Sync (`obsidian-synology-sync`)
+- **项目名称**：Synology QuickSync (`synology-quicksync`)
 - **作者**：`fang`
-- **当前版本**：`v1.2.2`
-- **项目源码路径**：`/Users/fj 1/Desktop/obsindiantodsm`
+- **当前版本**：`v1.3.0`
 - **群晖同步目标路径**：`/homes/username/ObsidianVault`
 
 ---
@@ -25,6 +24,13 @@
 ---
 
 ## 二、版本更新日志 (Changelog)
+
+### [v1.3.0] - 2026-10-29
+- **品牌与官方市场合规升级 (Community Plugin Store Submission)**：
+  - 插件更名为 **Synology QuickSync** (`synology-quicksync`)，突出群晖 QuickConnect 原生穿透与极速增量同步特性；
+  - 避免与社区已有第三方插件同名冲突；
+  - 补齐官方 MIT 开源许可文件 `LICENSE` 与 `authorUrl`；
+  - 敏感信息全面脱敏与本地路径清理，完全遵循 Obsidian 社区插件上架规范与安全准则。
 
 ### [v1.2.2] - 2026-10-21
 - **关键修复：解决下载 Markdown/文本文件时触发 `Unexpected token` 语法解析异常**：

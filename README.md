@@ -1,7 +1,7 @@
-# Synology Sync for Obsidian (`obsidian-synology-sync`)
+# Synology QuickSync for Obsidian (`synology-quicksync`)
 
-[![Version](https://img.shields.io/badge/version-1.2.2-blue.svg)](package.json)
-[![Author](https://img.shields.io/badge/author-fang-orange.svg)](manifest.json)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](package.json)
+[![Author](https://img.shields.io/badge/author-fang-orange.svg)](https://github.com/fangjing2021)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-73%2F73%20passing-brightgreen.svg)](tests/)
 
@@ -50,8 +50,9 @@ obsindiantodsm/
 │   └── settings/
 │       └── settings-tab.ts         # Obsidian 设置面板 UI
 ├── CHANGELOG.md                    # 版本更新与开发日志
+├── LICENSE                         # 开源许可证 (MIT)
 ├── package.json                    # npm 依赖与构建脚本
-├── manifest.json                   # Obsidian 插件元数据 (v1.2.2, author: fang)
+├── manifest.json                   # Obsidian 插件元数据 (v1.3.0, author: fang)
 └── esbuild.config.mjs              # 单文件打包配置
 ```
 
@@ -74,7 +75,7 @@ npm run build
 ### 2. 插件安装
 
 将编译好的 `main.js`、`manifest.json` 复制到你的 Obsidian Vault 插件目录：
-`<VaultPath>/.obsidian/plugins/obsidian-synology-sync/`
+`<VaultPath>/.obsidian/plugins/synology-quicksync/`
 
 ### 3. 配置说明
 

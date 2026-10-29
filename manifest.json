@@ -1,9 +1,10 @@
 {
-  "id": "obsidian-synology-sync",
-  "name": "Synology Sync",
-  "version": "1.2.2",
+  "id": "synology-quicksync",
+  "name": "Synology QuickSync",
+  "version": "1.3.0",
   "minAppVersion": "0.15.0",
-  "description": "Seamlessly sync your notes with Synology NAS via File Station Web API and QuickConnect.",
+  "description": "Seamlessly sync your Obsidian vault with Synology NAS via QuickConnect and File Station API.",
   "author": "fang",
+  "authorUrl": "https://github.com/fangjing2021",
   "isDesktopOnly": false
 }

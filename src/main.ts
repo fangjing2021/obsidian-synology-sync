@@ -25,13 +25,13 @@ export default class SynologySyncPlugin extends Plugin {
     this.setStatusBar('idle');
 
     // 3. Register Ribbon Icon
-    this.addRibbonIcon('refresh-cw', 'Synology Sync', async () => {
+    this.addRibbonIcon('refresh-cw', 'Synology QuickSync', async () => {
       await this.runSync();
     });
 
     // 4. Register Sync Command
     this.addCommand({
-      id: 'synology-sync-now',
+      id: 'synology-quicksync-now',
       name: 'Sync Now',
       callback: async () => {
         await this.runSync();
@@ -40,7 +40,7 @@ export default class SynologySyncPlugin extends Plugin {
 
     // 5. Register Test Connection Command
     this.addCommand({
-      id: 'synology-sync-test-connection',
+      id: 'synology-quicksync-test-connection',
       name: 'Test Connection',
       callback: async () => {
         try {
