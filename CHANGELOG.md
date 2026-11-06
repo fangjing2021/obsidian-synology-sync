@@ -2,7 +2,7 @@
 
 - **项目名称**：Synology QuickSync (`synology-quicksync`)
 - **作者**：`fang`
-- **当前版本**：`1.3.1`
+- **当前版本**：`1.3.2`
 - **群晖同步目标路径**：`/homes/username/ObsidianVault`
 
 ---
@@ -24,6 +24,12 @@
 ---
 
 ## 二、版本更新日志 (Changelog)
+
+### [1.3.2] - 2026-11-06
+- **修复官方社区审查错误 (Remove redundant 'Obsidian' from description)**：
+  - 修复 `manifest.json` 描述中包含 "Obsidian" 违规词导致的 `Plugin description must not include the word "Obsidian"` 自动化审查报错；
+  - 描述规范优化为简洁明了的 `"Seamlessly sync your vault and notes with Synology NAS via QuickConnect and File Station API."`；
+  - 维持 73 项全套自动化测试 100% 通过。
 
 ### [1.3.1] - 2026-11-05
 - **合规与自动化扫描发布 (Obsidian Community Directory Compliance)**：

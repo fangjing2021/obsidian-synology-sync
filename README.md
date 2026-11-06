@@ -1,6 +1,6 @@
 # Synology QuickSync for Obsidian (`synology-quicksync`)
 
-[![Version](https://img.shields.io/badge/version-1.3.1-blue.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-1.3.2-blue.svg)](package.json)
 [![Author](https://img.shields.io/badge/author-fang-orange.svg)](https://github.com/fangjing2021)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-73%2F73%20passing-brightgreen.svg)](tests/)
@@ -52,7 +52,7 @@ obsindiantodsm/
 ├── CHANGELOG.md                    # 版本更新与开发日志
 ├── LICENSE                         # 开源许可证 (MIT)
 ├── package.json                    # npm 依赖与构建脚本
-├── manifest.json                   # Obsidian 插件元数据 (v1.3.1, author: fang)
+├── manifest.json                   # Obsidian 插件元数据 (v1.3.2, author: fang)
 └── esbuild.config.mjs              # 单文件打包配置
 ```
 
