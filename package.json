@@ -1,6 +1,6 @@
 {
   "name": "synology-quicksync",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Seamlessly sync your Obsidian vault with Synology NAS via QuickConnect and File Station API",
   "main": "main.js",
   "scripts": {

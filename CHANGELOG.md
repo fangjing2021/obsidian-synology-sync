@@ -2,7 +2,7 @@
 
 - **项目名称**：Synology QuickSync (`synology-quicksync`)
 - **作者**：`fang`
-- **当前版本**：`v1.3.0`
+- **当前版本**：`1.3.1`
 - **群晖同步目标路径**：`/homes/username/ObsidianVault`
 
 ---
@@ -25,7 +25,13 @@
 
 ## 二、版本更新日志 (Changelog)
 
-### [v1.3.0] - 2026-10-29
+### [1.3.1] - 2026-11-05
+- **合规与自动化扫描发布 (Obsidian Community Directory Compliance)**：
+  - 清理 GitHub 上历史冲突的 `v` 前缀 Release，确保仅保留纯数字语义化版本 Tag；
+  - 严格匹配官方插件目录审核扫描器规则，构建全新产物并发布 Release `1.3.1`；
+  - 维持 73 项全套自动化测试 100% 通过。
+
+### [1.3.0] - 2026-10-29
 - **品牌与官方市场合规升级 (Community Plugin Store Submission)**：
   - 插件更名为 **Synology QuickSync** (`synology-quicksync`)，突出群晖 QuickConnect 原生穿透与极速增量同步特性；
   - 避免与社区已有第三方插件同名冲突；
