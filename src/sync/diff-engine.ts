@@ -34,7 +34,7 @@ export function isIgnored(path: string, ignorePatterns: string[]): boolean {
       continue;
     }
 
-    // Directory pattern with trailing slash: e.g. .obsidian/cache/ or /archive/
+    // Directory pattern with trailing slash: e.g. .cache/ or /archive/
     if (cleanPattern.endsWith('/')) {
       const dirName = cleanPattern.replace(/^\/+/, '').replace(/\/+$/, '');
       if (
@@ -47,7 +47,7 @@ export function isIgnored(path: string, ignorePatterns: string[]): boolean {
       continue;
     }
 
-    // Direct basename or path match (e.g. .DS_Store, .obsidian/workspace.json)
+    // Direct basename or path match (e.g. .DS_Store, cache/workspace.json)
     const cleanExact = cleanPattern.replace(/^\/+/, '');
     if (
       normalizedPath === cleanExact ||

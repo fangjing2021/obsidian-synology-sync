@@ -2,7 +2,7 @@
 
 - **项目名称**：Synology QuickSync (`synology-quicksync`)
 - **作者**：`fang`
-- **当前版本**：`1.3.2`
+- **当前版本**：`1.3.3`
 - **群晖同步目标路径**：`/homes/username/ObsidianVault`
 
 ---
@@ -24,6 +24,17 @@
 ---
 
 ## 二、版本更新日志 (Changelog)
+
+### [1.3.3] - 2026-11-07
+- **官方社区插件市场自动化审查全量合规适配 (Obsidian Community Directory Linter Full Compliance)**：
+  - **API 版本声明修复**：更新 `manifest.json` 中 `minAppVersion` 为 `1.6.6`，满足 `createFolder`、`ButtonComponent.setDisabled` 及 `FileManager.trashFile` 的最低 Obsidian API 版本要求，修复 `obsidianmd/no-unsupported-api` 阻塞级错误；
+  - **UI 规范化修复**：将设置页中原生 HTML 标题元素（`containerEl.createEl('h2/h3')`）全面改造为官方推荐的 `new Setting(containerEl).setName(...).setHeading()`，修复界面一致性审查错误；
+  - **Node 原生内置模块替换**：构建配置移除过时的 `builtin-modules` 第三方 npm 包，采用 Node 官方原生 `node:module` 的 `builtinModules`；
+  - **命令 ID 规范化**：去掉命令 ID 中的冗余插件 ID 前缀（`synology-quicksync-now` -> `sync-now`, `synology-quicksync-test-connection` -> `test-connection`），遵从官方命令调色板注册命名规范；
+  - **弹窗窗口计时器兼容性**：网络连接探测及超时逻辑由 `setTimeout` / `clearTimeout` 改为 `window.setTimeout` / `window.clearTimeout`，保障多窗口/Popout 拆分窗口运行稳定性；
+  - **用户删除偏好尊重**：文件删除逻辑由底层的 `Vault.trash` 升级为官方高阶 API `FileManager.trashFile`，完美尊重用户在 Obsidian 全局设置中的删除偏好；
+  - **动态配置目录安全防护**：全面消除 AST 中对 `.obsidian` 的硬编码字面量，改用官方动态属性 `Vault#configDir`，并在同步比对引擎中动态挂载配置目录忽略规则，完美兼容用户自定义配置目录名称；
+  - **多语言双语 README 支持**：新增系统、详尽的英文文档与中英双语指引，全面满足 Obsidian 官方社区英文首选审查准则。
 
 ### [1.3.2] - 2026-11-06
 - **修复官方社区审查错误 (Remove redundant 'Obsidian' from description)**：

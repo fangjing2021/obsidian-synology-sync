@@ -14,7 +14,7 @@ export class SynologySyncSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl('h2', { text: 'Synology QuickSync Settings' });
+    new Setting(containerEl).setName('Synology QuickSync Settings').setHeading();
 
     new Setting(containerEl)
       .setName('QuickConnect ID')
@@ -99,7 +99,7 @@ export class SynologySyncSettingTab extends PluginSettingTab {
           }
         }));
 
-    containerEl.createEl('h3', { text: 'Sync Options' });
+    new Setting(containerEl).setName('Sync Options').setHeading();
 
     new Setting(containerEl)
       .setName('Auto-sync on Startup')
@@ -133,7 +133,7 @@ export class SynologySyncSettingTab extends PluginSettingTab {
         text.inputEl.rows = 6;
         text.inputEl.cols = 40;
         text
-          .setPlaceholder('.obsidian/**\n.git/**\n*.tmp\n.DS_Store')
+          .setPlaceholder(`${this.app.vault.configDir}/**\n.git/**\n*.tmp\n.DS_Store`)
           .setValue((this.plugin.settings.ignorePatterns || []).join('\n'))
           .onChange(async (value) => {
             this.plugin.settings.ignorePatterns = value

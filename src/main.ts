@@ -31,7 +31,7 @@ export default class SynologySyncPlugin extends Plugin {
 
     // 4. Register Sync Command
     this.addCommand({
-      id: 'synology-quicksync-now',
+      id: 'sync-now',
       name: 'Sync Now',
       callback: async () => {
         await this.runSync();
@@ -40,7 +40,7 @@ export default class SynologySyncPlugin extends Plugin {
 
     // 5. Register Test Connection Command
     this.addCommand({
-      id: 'synology-quicksync-test-connection',
+      id: 'test-connection',
       name: 'Test Connection',
       callback: async () => {
         try {
@@ -146,9 +146,9 @@ export default class SynologySyncPlugin extends Plugin {
 
   private createResolver(): QuickConnectResolver {
     const pingFn = async (url: string) => {
-      let timeoutHandle: any = null;
+      let timeoutHandle: number | null = null;
       const timeoutPromise = new Promise<boolean>((resolve) => {
-        timeoutHandle = setTimeout(() => resolve(false), 2000);
+        timeoutHandle = window.setTimeout(() => resolve(false), 2000);
       });
 
       const pingPromise = (async () => {
@@ -175,7 +175,7 @@ export default class SynologySyncPlugin extends Plugin {
           return false;
         } finally {
           if (timeoutHandle !== null) {
-            clearTimeout(timeoutHandle);
+            window.clearTimeout(timeoutHandle);
           }
         }
       })();
@@ -258,8 +258,8 @@ export default class SynologySyncPlugin extends Plugin {
       deleteFile: async (path: string) => {
         const file = this.app.vault.getAbstractFileByPath(normalizePath(path));
         if (file instanceof TFile) {
-          // 移动到系统或 Obsidian 回收站，防止误删
-          await this.app.vault.trash(file, true);
+          // 移动到回收站，尊重用户在 Obsidian 设置中的删除偏好
+          await this.app.fileManager.trashFile(file);
         }
       },
     };
@@ -356,8 +356,12 @@ export default class SynologySyncPlugin extends Plugin {
       // 1. Fetch local files
       const localFiles = await this.getLocalFiles();
 
-      // 2. Compute 3-way diff
-      const diff = computeDiff(localFiles, remoteFiles, this.settings.ignorePatterns, this.syncIndex);
+      // 2. Compute 3-way diff (dynamically include vault configDir to protect settings)
+      const effectiveIgnore = [
+        ...(this.settings.ignorePatterns || []),
+        `${this.app.vault.configDir}/**`,
+      ];
+      const diff = computeDiff(localFiles, remoteFiles, effectiveIgnore, this.syncIndex);
 
       // 3. Execute sync
       const manager = new SyncManager(client, this.getVaultAdapter(), this.settings.remotePath, this.syncIndex);

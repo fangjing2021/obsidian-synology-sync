@@ -43,7 +43,6 @@ var DEFAULT_SETTINGS = {
     ".DS_Store",
     "Thumbs.db",
     "desktop.ini",
-    ".obsidian/**",
     ".git/**",
     "*.tmp",
     "*.syno_download.tmp"
@@ -60,7 +59,7 @@ var SynologySyncSettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Synology QuickSync Settings" });
+    new import_obsidian.Setting(containerEl).setName("Synology QuickSync Settings").setHeading();
     new import_obsidian.Setting(containerEl).setName("QuickConnect ID").setDesc("Your Synology QuickConnect ID (for external/WAN sync).").addText((text) => text.setPlaceholder("e.g. my-nas").setValue(this.plugin.settings.quickConnectId).onChange(async (value) => {
       this.plugin.settings.quickConnectId = value.trim();
       this.plugin.resetActiveSession();
@@ -102,7 +101,7 @@ var SynologySyncSettingTab = class extends import_obsidian.PluginSettingTab {
         btn.setButtonText("Test Connection");
       }
     }));
-    containerEl.createEl("h3", { text: "Sync Options" });
+    new import_obsidian.Setting(containerEl).setName("Sync Options").setHeading();
     new import_obsidian.Setting(containerEl).setName("Auto-sync on Startup").setDesc("Automatically synchronize files when Obsidian opens.").addToggle((toggle) => toggle.setValue(this.plugin.settings.autoSyncOnStartup).onChange(async (value) => {
       this.plugin.settings.autoSyncOnStartup = value;
       await this.plugin.saveSettings();
@@ -115,7 +114,10 @@ var SynologySyncSettingTab = class extends import_obsidian.PluginSettingTab {
     new import_obsidian.Setting(containerEl).setName("Ignore Patterns").setDesc("Paths or wildcard patterns to ignore during sync (one pattern per line). Supported: *.tmp, folder/**, ._*").addTextArea((text) => {
       text.inputEl.rows = 6;
       text.inputEl.cols = 40;
-      text.setPlaceholder(".obsidian/**\n.git/**\n*.tmp\n.DS_Store").setValue((this.plugin.settings.ignorePatterns || []).join("\n")).onChange(async (value) => {
+      text.setPlaceholder(`${this.app.vault.configDir}/**
+.git/**
+*.tmp
+.DS_Store`).setValue((this.plugin.settings.ignorePatterns || []).join("\n")).onChange(async (value) => {
         this.plugin.settings.ignorePatterns = value.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
         await this.plugin.saveSettings();
       });
@@ -992,14 +994,14 @@ var SynologySyncPlugin = class extends import_obsidian2.Plugin {
       await this.runSync();
     });
     this.addCommand({
-      id: "synology-quicksync-now",
+      id: "sync-now",
       name: "Sync Now",
       callback: async () => {
         await this.runSync();
       }
     });
     this.addCommand({
-      id: "synology-quicksync-test-connection",
+      id: "test-connection",
       name: "Test Connection",
       callback: async () => {
         try {
@@ -1095,7 +1097,7 @@ var SynologySyncPlugin = class extends import_obsidian2.Plugin {
     const pingFn = async (url) => {
       let timeoutHandle = null;
       const timeoutPromise = new Promise((resolve) => {
-        timeoutHandle = setTimeout(() => resolve(false), 2e3);
+        timeoutHandle = window.setTimeout(() => resolve(false), 2e3);
       });
       const pingPromise = (async () => {
         try {
@@ -1121,7 +1123,7 @@ var SynologySyncPlugin = class extends import_obsidian2.Plugin {
           return false;
         } finally {
           if (timeoutHandle !== null) {
-            clearTimeout(timeoutHandle);
+            window.clearTimeout(timeoutHandle);
           }
         }
       })();
@@ -1199,7 +1201,7 @@ var SynologySyncPlugin = class extends import_obsidian2.Plugin {
       deleteFile: async (path) => {
         const file = this.app.vault.getAbstractFileByPath((0, import_obsidian2.normalizePath)(path));
         if (file instanceof import_obsidian2.TFile) {
-          await this.app.vault.trash(file, true);
+          await this.app.fileManager.trashFile(file);
         }
       }
     };
@@ -1277,7 +1279,11 @@ var SynologySyncPlugin = class extends import_obsidian2.Plugin {
         }
       }
       const localFiles = await this.getLocalFiles();
-      const diff = computeDiff(localFiles, remoteFiles, this.settings.ignorePatterns, this.syncIndex);
+      const effectiveIgnore = [
+        ...this.settings.ignorePatterns || [],
+        `${this.app.vault.configDir}/**`
+      ];
+      const diff = computeDiff(localFiles, remoteFiles, effectiveIgnore, this.syncIndex);
       const manager = new SyncManager(client, this.getVaultAdapter(), this.settings.remotePath, this.syncIndex);
       const report = await manager.executeSync(diff);
       if (report.updatedIndex) {

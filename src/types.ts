@@ -21,7 +21,6 @@ export const DEFAULT_SETTINGS: SynoSyncSettings = {
     '.DS_Store',
     'Thumbs.db',
     'desktop.ini',
-    '.obsidian/**',
     '.git/**',
     '*.tmp',
     '*.syno_download.tmp'
