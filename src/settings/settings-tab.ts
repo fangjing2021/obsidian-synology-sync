@@ -14,7 +14,7 @@ export class SynologySyncSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    new Setting(containerEl).setName('Synology QuickSync Settings').setHeading();
+    new Setting(containerEl).setName('Connection').setHeading();
 
     new Setting(containerEl)
       .setName('QuickConnect ID')
@@ -91,15 +91,16 @@ export class SynologySyncSettingTab extends PluginSettingTab {
           try {
             await this.plugin.testConnection();
             new Notice('✓ Successfully connected to Synology NAS!');
-          } catch (e: any) {
-            new Notice(`✗ Connection failed: ${e.message || e}`);
+          } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            new Notice(`✗ Connection failed: ${msg}`);
           } finally {
             btn.setDisabled(false);
             btn.setButtonText('Test Connection');
           }
         }));
 
-    new Setting(containerEl).setName('Sync Options').setHeading();
+    new Setting(containerEl).setName('Synchronization').setHeading();
 
     new Setting(containerEl)
       .setName('Auto-sync on Startup')

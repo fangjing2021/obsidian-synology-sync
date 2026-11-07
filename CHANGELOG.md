@@ -2,7 +2,7 @@
 
 - **项目名称**：Synology QuickSync (`synology-quicksync`)
 - **作者**：`fang`
-- **当前版本**：`1.3.3`
+- **当前版本**：`1.3.4`
 - **群晖同步目标路径**：`/homes/username/ObsidianVault`
 
 ---
@@ -24,6 +24,11 @@
 ---
 
 ## 二、版本更新日志 (Changelog)
+
+### [1.3.4] - 2026-11-07
+- **修复设置面板标题合规错误 (Settings Headings Compliance)**：
+  - **消除标题中冗余词汇**：遵从 Obsidian 官方 UI 审查准则，设置面板各分区标题命名由 `Synology QuickSync Settings`、`Sync Options` 简化规范为语义精炼的 `Connection` 与 `Synchronization`，彻底修复 `Avoid using "settings" in settings headings` 及 `Avoid including the plugin name in settings headings` 审查错误；
+  - **异常捕获类型安全提升**：网络连接测试与同步调度过程中的错误捕获由 `catch (e: any)` 提升为 `catch (e: unknown)`，强化代码类型严谨度。
 
 ### [1.3.3] - 2026-11-07
 - **官方社区插件市场自动化审查全量合规适配 (Obsidian Community Directory Linter Full Compliance)**：

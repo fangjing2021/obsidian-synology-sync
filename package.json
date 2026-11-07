@@ -1,6 +1,6 @@
 {
   "name": "synology-quicksync",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "description": "Seamlessly sync your vault and notes with Synology NAS via QuickConnect and File Station API",
   "main": "main.js",
   "scripts": {

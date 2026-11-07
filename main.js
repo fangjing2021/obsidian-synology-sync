@@ -59,7 +59,7 @@ var SynologySyncSettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    new import_obsidian.Setting(containerEl).setName("Synology QuickSync Settings").setHeading();
+    new import_obsidian.Setting(containerEl).setName("Connection").setHeading();
     new import_obsidian.Setting(containerEl).setName("QuickConnect ID").setDesc("Your Synology QuickConnect ID (for external/WAN sync).").addText((text) => text.setPlaceholder("e.g. my-nas").setValue(this.plugin.settings.quickConnectId).onChange(async (value) => {
       this.plugin.settings.quickConnectId = value.trim();
       this.plugin.resetActiveSession();
@@ -95,13 +95,14 @@ var SynologySyncSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.testConnection();
         new import_obsidian.Notice("\u2713 Successfully connected to Synology NAS!");
       } catch (e) {
-        new import_obsidian.Notice(`\u2717 Connection failed: ${e.message || e}`);
+        const msg = e instanceof Error ? e.message : String(e);
+        new import_obsidian.Notice(`\u2717 Connection failed: ${msg}`);
       } finally {
         btn.setDisabled(false);
         btn.setButtonText("Test Connection");
       }
     }));
-    new import_obsidian.Setting(containerEl).setName("Sync Options").setHeading();
+    new import_obsidian.Setting(containerEl).setName("Synchronization").setHeading();
     new import_obsidian.Setting(containerEl).setName("Auto-sync on Startup").setDesc("Automatically synchronize files when Obsidian opens.").addToggle((toggle) => toggle.setValue(this.plugin.settings.autoSyncOnStartup).onChange(async (value) => {
       this.plugin.settings.autoSyncOnStartup = value;
       await this.plugin.saveSettings();
@@ -1009,7 +1010,8 @@ var SynologySyncPlugin = class extends import_obsidian2.Plugin {
           await this.testConnection();
           new import_obsidian2.Notice("\u2713 Successfully connected to Synology NAS!");
         } catch (e) {
-          new import_obsidian2.Notice(`\u2717 Connection failed: ${e.message || e}`);
+          const msg = e instanceof Error ? e.message : String(e);
+          new import_obsidian2.Notice(`\u2717 Connection failed: ${msg}`);
         }
       }
     });
@@ -1268,7 +1270,7 @@ var SynologySyncPlugin = class extends import_obsidian2.Plugin {
       try {
         remoteFiles = await client.listFiles(this.settings.remotePath);
       } catch (err) {
-        const errMsg = String(err?.message || err);
+        const errMsg = err instanceof Error ? err.message : String(err);
         const isSessionExpired = errMsg.includes("105") || errMsg.includes("106") || errMsg.includes("107") || errMsg.includes("119");
         if (isSessionExpired) {
           this.activeClient = null;
@@ -1306,7 +1308,8 @@ var SynologySyncPlugin = class extends import_obsidian2.Plugin {
       }
     } catch (e) {
       this.setStatusBar("error");
-      new import_obsidian2.Notice(`Sync Failed: ${e.message || e}`);
+      const msg = e instanceof Error ? e.message : String(e);
+      new import_obsidian2.Notice(`Sync Failed: ${msg}`);
       console.error("[SynologySync]", e);
       this.activeClient = null;
     } finally {

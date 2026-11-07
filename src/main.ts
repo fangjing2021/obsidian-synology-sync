@@ -47,8 +47,9 @@ export default class SynologySyncPlugin extends Plugin {
           new Notice('Testing connection to Synology NAS...');
           await this.testConnection();
           new Notice('✓ Successfully connected to Synology NAS!');
-        } catch (e: any) {
-          new Notice(`✗ Connection failed: ${e.message || e}`);
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : String(e);
+          new Notice(`✗ Connection failed: ${msg}`);
         }
       },
     });
@@ -339,9 +340,9 @@ export default class SynologySyncPlugin extends Plugin {
       let remoteFiles;
       try {
         remoteFiles = await client.listFiles(this.settings.remotePath);
-      } catch (err: any) {
+      } catch (err: unknown) {
         // 若会话超时失效 (DSM error 105, 106, 107, 119)，清除缓存并重新登录一次
-        const errMsg = String(err?.message || err);
+        const errMsg = err instanceof Error ? err.message : String(err);
         const isSessionExpired =
           errMsg.includes('105') || errMsg.includes('106') || errMsg.includes('107') || errMsg.includes('119');
         if (isSessionExpired) {
@@ -387,9 +388,10 @@ export default class SynologySyncPlugin extends Plugin {
           `Sync Done: ↑${report.uploadedCount} ↓${report.downloadedCount} ⚡${report.conflictCount} 🗑️${report.deletedRemoteCount + report.deletedLocalCount}`
         );
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       this.setStatusBar('error');
-      new Notice(`Sync Failed: ${e.message || e}`);
+      const msg = e instanceof Error ? e.message : String(e);
+      new Notice(`Sync Failed: ${msg}`);
       console.error('[SynologySync]', e);
       // 若是网络不可达或关键错误，重置缓存以便下次重新探活
       this.activeClient = null;

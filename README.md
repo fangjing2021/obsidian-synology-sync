@@ -1,6 +1,6 @@
 # Synology QuickSync for Obsidian (`synology-quicksync`)
 
-[![Version](https://img.shields.io/badge/version-1.3.3-blue.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-1.3.4-blue.svg)](package.json)
 [![Author](https://img.shields.io/badge/author-fang-orange.svg)](https://github.com/fangjing2021)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-73%2F73%20passing-brightgreen.svg)](tests/)
